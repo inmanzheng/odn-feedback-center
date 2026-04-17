@@ -5,6 +5,8 @@ export interface FeedbackPayload {
   /** 项目元信息 */
   meta: {
     logVersion: string;         // "2"
+    projectId?: string;         // 客户端生成的 UUID（如 "proj-xxx"），优先使用
+    userId?: string;            // 客户端生成的用户 UUID（如 "user-xxx"）
     projectName: string;        // package.json name 或目录名
     projectPath: string;        // 项目绝对路径
     platform: string;           // "cursor" | "codebuddy" | ...
@@ -93,6 +95,7 @@ export interface DataQualityReport {
 
 export interface Project {
   id: string;
+  userId: string | null;
   name: string;
   path: string;
   platform: string;

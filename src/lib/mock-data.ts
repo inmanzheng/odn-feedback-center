@@ -11,6 +11,7 @@ import type {
 export const mockProjects: Project[] = [
   {
     id: "proj-001",
+    userId: "user-mock-001",
     name: "one-design-next",
     path: "/Users/dev/projects/one-design-next",
     platform: "cursor",
@@ -23,6 +24,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: "proj-002",
+    userId: "user-mock-001",
     name: "ad-platform-web",
     path: "/Users/dev/projects/ad-platform-web",
     platform: "cursor",
@@ -35,6 +37,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: "proj-003",
+    userId: "user-mock-002",
     name: "tad-design-system",
     path: "/Users/dev/projects/tad-design-system",
     platform: "cursor",
@@ -47,6 +50,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: "proj-004",
+    userId: "user-mock-002",
     name: "feedback-website",
     path: "/Users/dev/projects/feedback-website",
     platform: "codebuddy",

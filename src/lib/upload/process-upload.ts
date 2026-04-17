@@ -32,8 +32,10 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   const { meta, conversations, summary, environment, artifacts, screenshots, dataQuality } = payload;
 
   // 1. 生成 ID
-  // 使用 projectName 作为 projectId 的基础（确保同名项目合并）
-  const projectId = slugify(meta.projectName);
+  // 优先使用客户端传来的 projectId（本地持久化的 UUID），
+  // 如果没有则 fallback 到 projectName slug 化（向后兼容）
+  const projectId = meta.projectId || slugify(meta.projectName);
+  const userId = meta.userId || null;
   const sessionId = `sess-${generateId()}`;
   const now = new Date().toISOString();
 
@@ -43,6 +45,7 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   // 3. 存储 Project（upsert）
   const project: Project = {
     id: projectId,
+    userId,
     name: meta.projectName,
     path: meta.projectPath,
     platform: meta.platform,
@@ -59,6 +62,7 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   const existing = await getProjectById(projectId);
   if (existing) {
     project.createdAt = existing.createdAt;
+    project.userId = existing.userId || userId; // 保留最初设置的 userId
     project.totalSessions = existing.totalSessions + 1;
     project.totalFeedbacks = existing.totalFeedbacks + 1;
     // 合并 availableSources
