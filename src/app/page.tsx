@@ -6,6 +6,7 @@ import { mockProjects } from "@/lib/mock-data";
 import { Search, LayoutGrid, Clock, TrendingUp } from "lucide-react";
 import type { Project } from "@/types";
 
+const API_KEY = "odn-feedback-2026-secret";
 type FilterTab = "all" | "recent" | "most";
 
 export default function HomePage() {
@@ -21,11 +22,9 @@ export default function HomePage() {
       if (json.success && json.data?.length > 0) {
         setProjects(json.data);
       } else {
-        // KV 无数据时使用 mock 数据展示
         setProjects(mockProjects);
       }
     } catch {
-      // API 不可用时 fallback 到 mock
       setProjects(mockProjects);
     } finally {
       setLoading(false);
@@ -35,6 +34,30 @@ export default function HomePage() {
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
+
+  const handleDeleteProject = useCallback(
+    async (projectId: string) => {
+      const project = projects.find((p) => p.id === projectId);
+      if (!confirm(`确认删除项目「${project?.name || projectId}」及其所有会话数据？此操作不可恢复。`)) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/v1/projects/${projectId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${API_KEY}` },
+        });
+        const json = await res.json();
+        if (json.success) {
+          setProjects((prev) => prev.filter((p) => p.id !== projectId));
+        } else {
+          alert(`删除失败: ${json.error}`);
+        }
+      } catch {
+        alert("删除请求失败，请稍后重试");
+      }
+    },
+    [projects]
+  );
 
   const filtered = projects.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
@@ -119,7 +142,7 @@ export default function HomePage() {
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {sorted.map((project) => (
-            <ProjectCard key={project.id} project={project} />
+            <ProjectCard key={project.id} project={project} onDelete={handleDeleteProject} />
           ))}
         </div>
       )}

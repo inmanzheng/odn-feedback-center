@@ -147,6 +147,23 @@ export interface Artifact {
   collectedVia: string;
 }
 
+// ─── 增量追加 Payload（PATCH /api/v1/sessions/[sessionId]）────
+
+export interface PatchSessionPayload {
+  /** 追加的对话记录 */
+  conversations?: ConversationEntry[];
+  /** 追加的截图 */
+  screenshots?: ScreenshotEntry[];
+  /** 追加的产出文件 */
+  artifacts?: ArtifactEntry[];
+  /** 更新摘要（覆盖） */
+  summary?: string;
+  /** 更新环境快照（覆盖） */
+  environment?: EnvironmentSnapshot;
+  /** 更新数据质量报告（覆盖） */
+  dataQuality?: DataQualityReport;
+}
+
 // ─── API 响应类型 ────────────────────────────────────────
 
 export interface UploadResponse {
@@ -156,5 +173,20 @@ export interface UploadResponse {
   projectName?: string;
   conversationCount?: number;
   screenshotCount?: number;
+  error?: string;
+}
+
+export interface PatchResponse {
+  success: boolean;
+  sessionId?: string;
+  appendedConversations?: number;
+  appendedScreenshots?: number;
+  appendedArtifacts?: number;
+  error?: string;
+}
+
+export interface DeleteResponse {
+  success: boolean;
+  deleted?: string;
   error?: string;
 }

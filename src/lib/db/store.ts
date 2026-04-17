@@ -120,3 +120,93 @@ export async function insertArtifacts(
     await redis.set(`artifacts:${sessionId}`, JSON.stringify(artifacts));
   }
 }
+
+// ─── Append (追加到已有数据) ────────────────────────────
+
+export async function appendConversations(
+  sessionId: string,
+  newConversations: Conversation[]
+): Promise<number> {
+  const existing = await getConversations(sessionId);
+  const merged = [...existing, ...newConversations];
+  await redis.set(`conversations:${sessionId}`, JSON.stringify(merged));
+  return merged.length;
+}
+
+export async function appendScreenshots(
+  sessionId: string,
+  newScreenshots: Screenshot[]
+): Promise<number> {
+  if (newScreenshots.length === 0) return 0;
+  const existing = await getScreenshots(sessionId);
+  const merged = [...existing, ...newScreenshots];
+  await redis.set(`screenshots:${sessionId}`, JSON.stringify(merged));
+  return merged.length;
+}
+
+export async function appendArtifacts(
+  sessionId: string,
+  newArtifacts: Artifact[]
+): Promise<number> {
+  if (newArtifacts.length === 0) return 0;
+  const existing = await getArtifacts(sessionId);
+  const merged = [...existing, ...newArtifacts];
+  await redis.set(`artifacts:${sessionId}`, JSON.stringify(merged));
+  return merged.length;
+}
+
+// ─── Update Session ─────────────────────────────────────
+
+export async function updateSession(
+  sessionId: string,
+  updates: Partial<Session>
+): Promise<void> {
+  const existing = await getSessionById(sessionId);
+  if (!existing) throw new Error(`Session ${sessionId} not found`);
+  const updated = { ...existing, ...updates, id: sessionId };
+  await redis.set(`session:${sessionId}`, JSON.stringify(updated));
+}
+
+// ─── Delete ─────────────────────────────────────────────
+
+export async function deleteSession(sessionId: string): Promise<void> {
+  const session = await getSessionById(sessionId);
+  if (!session) return;
+
+  // 删除关联数据
+  const pipeline = redis.pipeline();
+  pipeline.del(`conversations:${sessionId}`);
+  pipeline.del(`screenshots:${sessionId}`);
+  pipeline.del(`artifacts:${sessionId}`);
+  pipeline.del(`session:${sessionId}`);
+  pipeline.srem(`sessions:${session.projectId}`, sessionId);
+  await pipeline.exec();
+
+  // 更新 project 计数
+  const project = await getProjectById(session.projectId);
+  if (project) {
+    project.totalSessions = Math.max(0, project.totalSessions - 1);
+    project.totalFeedbacks = Math.max(0, project.totalFeedbacks - 1);
+    await upsertProject(project);
+  }
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  // 先删除所有关联 sessions
+  const sessionIds = await redis.smembers(`sessions:${projectId}`);
+  for (const sid of sessionIds) {
+    const pipeline = redis.pipeline();
+    pipeline.del(`conversations:${sid}`);
+    pipeline.del(`screenshots:${sid}`);
+    pipeline.del(`artifacts:${sid}`);
+    pipeline.del(`session:${sid}`);
+    await pipeline.exec();
+  }
+
+  // 删除 sessions 集合、project 本身、从 projects 集合移除
+  const pipeline = redis.pipeline();
+  pipeline.del(`sessions:${projectId}`);
+  pipeline.del(`project:${projectId}`);
+  pipeline.srem("projects", projectId);
+  await pipeline.exec();
+}

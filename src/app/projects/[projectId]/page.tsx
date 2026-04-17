@@ -9,6 +9,8 @@ import { formatDateTime } from "@/lib/utils";
 import { ChevronLeft, Monitor, GitBranch, Calendar } from "lucide-react";
 import type { Project, Session } from "@/types";
 
+const API_KEY = "odn-feedback-2026-secret";
+
 export default function ProjectDetailPage() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -25,7 +27,6 @@ export default function ProjectDetailPage() {
         setProject(json.data.project);
         setSessions(json.data.sessions);
       } else {
-        // Fallback to mock
         const mockProject = mockProjects.find((p) => p.id === projectId);
         setProject(mockProject ?? null);
         setSessions(mockSessions[projectId] ?? []);
@@ -42,6 +43,29 @@ export default function ProjectDetailPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      if (!confirm("确认删除此会话及其所有对话、截图数据？此操作不可恢复。")) {
+        return;
+      }
+      try {
+        const res = await fetch(`/api/v1/sessions/${sessionId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${API_KEY}` },
+        });
+        const json = await res.json();
+        if (json.success) {
+          setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+        } else {
+          alert(`删除失败: ${json.error}`);
+        }
+      } catch {
+        alert("删除请求失败，请稍后重试");
+      }
+    },
+    []
+  );
 
   if (loading) {
     return (
@@ -116,7 +140,7 @@ export default function ProjectDetailPage() {
           </div>
         ) : (
           sessions.map((session) => (
-            <SessionCard key={session.id} session={session} projectId={projectId} />
+            <SessionCard key={session.id} session={session} projectId={projectId} onDelete={handleDeleteSession} />
           ))
         )}
       </div>
