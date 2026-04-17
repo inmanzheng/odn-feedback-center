@@ -4,6 +4,7 @@
 
 import {
   upsertProject,
+  getProjectById,
   insertSession,
   insertConversations,
   insertScreenshots,
@@ -58,7 +59,6 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   };
 
   // 获取已有项目信息来合并计数
-  const { getProjectById } = await import("@/lib/db/store");
   const existing = await getProjectById(projectId);
   if (existing) {
     project.createdAt = existing.createdAt;
@@ -133,11 +133,17 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
 }
 
 function slugify(name: string): string {
-  return name
+  // 先用 ASCII 安全字符替换，中文字符编码处理
+  const slug = name
     .toLowerCase()
     .replace(/[^a-z0-9\u4e00-\u9fff-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
+  // 如果包含非 ASCII 字符（如中文），进行编码以避免 key/URL 问题
+  if (/[^\x00-\x7F]/.test(slug)) {
+    return encodeURIComponent(slug);
+  }
+  return slug;
 }
 
 function extractSkillsFromSummary(summary: string | null): string[] {

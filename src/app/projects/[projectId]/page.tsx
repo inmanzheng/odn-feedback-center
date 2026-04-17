@@ -23,15 +23,17 @@ export default function ProjectDetailPage() {
     try {
       const res = await fetch(`/api/v1/projects/${projectId}`);
       const json = await res.json();
-      if (json.success && json.data) {
-        setProject(json.data.project);
-        setSessions(json.data.sessions);
+      if (json.success) {
+        setProject(json.data?.project ?? null);
+        setSessions(json.data?.sessions ?? []);
       } else {
+        // API 返回 success: false，使用 mock 数据
         const mockProject = mockProjects.find((p) => p.id === projectId);
         setProject(mockProject ?? null);
         setSessions(mockSessions[projectId] ?? []);
       }
     } catch {
+      // 网络错误，使用 mock 数据
       const mockProject = mockProjects.find((p) => p.id === projectId);
       setProject(mockProject ?? null);
       setSessions(mockSessions[projectId] ?? []);

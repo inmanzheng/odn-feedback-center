@@ -19,12 +19,15 @@ export default function HomePage() {
     try {
       const res = await fetch("/api/v1/projects");
       const json = await res.json();
-      if (json.success && json.data?.length > 0) {
-        setProjects(json.data);
+      if (json.success) {
+        // API 成功则使用返回数据，即使为空数组也不回退到 mock
+        setProjects(json.data ?? []);
       } else {
+        // API 返回 success: false，使用 mock 数据
         setProjects(mockProjects);
       }
     } catch {
+      // 网络错误或 API 不可用，使用 mock 数据
       setProjects(mockProjects);
     } finally {
       setLoading(false);

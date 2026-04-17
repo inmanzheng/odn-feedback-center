@@ -14,6 +14,12 @@ export function formatRelativeTime(date: string | Date): string {
   const now = new Date();
   const d = new Date(date);
   const diffMs = now.getTime() - d.getTime();
+
+  // 处理未来时间
+  if (diffMs < 0) {
+    return d.toLocaleDateString("zh-CN");
+  }
+
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
   const diffHour = Math.floor(diffMin / 60);
@@ -35,9 +41,13 @@ export function formatFileSize(bytes: number): string {
 }
 
 export function safeJsonParse<T>(str: string, fallback: T): T {
-  const result = JSON.parse(str);
-  if (result === undefined || result === null) return fallback;
-  return result as T;
+  try {
+    const result = JSON.parse(str);
+    if (result === undefined || result === null) return fallback;
+    return result as T;
+  } catch {
+    return fallback;
+  }
 }
 
 export function formatDateTime(date: string | Date): string {

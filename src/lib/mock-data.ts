@@ -87,7 +87,7 @@ export const mockSessions: Record<string, Session[]> = {
         project: { name: "one-design-next", path: "/Users/dev/projects/one-design-next", odnVersion: "2.1.0", devServer: "localhost:3000" },
         git: { branch: "feat/crowd-list", lastCommits: ["abc1234 feat: add CrowdList page", "def5678 fix: table style"], status: "M src/pages/CrowdList.tsx", remoteUrl: "https://github.com/nicepkg/one-design-next" },
         system: { platform: "darwin", nodeVersion: "v20.11.0", npmVersion: "10.2.4" },
-        workspace: { vscodeSettings: null, cursorRules: null, fileCount: "156" },
+        workspace: { vscodeSettings: null, cursorRules: null, fileCount: 156 },
       },
       createdAt: "2026-04-17T14:30:00Z",
     },

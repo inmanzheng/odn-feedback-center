@@ -33,20 +33,26 @@ export default function SessionDetailPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch(`/api/v1/sessions/${sessionId}`);
-      const json = await res.json();
-      if (json.success && json.data) {
-        setSession(json.data.session);
-        setConversations(json.data.conversations);
-        setScreenshots(json.data.screenshots);
-        // 获取项目名
-        const projRes = await fetch(`/api/v1/projects/${projectId}`);
-        const projJson = await projRes.json();
-        if (projJson.success) {
-          setProjectName(projJson.data.project.name);
-        }
+      // 并行请求 session 和项目数据，避免串行等待
+      const [sessionRes, projRes] = await Promise.all([
+        fetch(`/api/v1/sessions/${sessionId}`),
+        fetch(`/api/v1/projects/${projectId}`),
+      ]);
+      const [sessionJson, projJson] = await Promise.all([
+        sessionRes.json(),
+        projRes.json(),
+      ]);
+
+      if (sessionJson.success) {
+        setSession(sessionJson.data.session);
+        setConversations(sessionJson.data.conversations ?? []);
+        setScreenshots(sessionJson.data.screenshots ?? []);
       } else {
         fallbackToMock();
+      }
+
+      if (projJson.success) {
+        setProjectName(projJson.data.project.name);
       }
     } catch {
       fallbackToMock();

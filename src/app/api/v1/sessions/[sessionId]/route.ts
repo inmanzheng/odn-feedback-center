@@ -97,10 +97,13 @@ export async function PATCH(
 
     // 追加对话
     if (payload.conversations && payload.conversations.length > 0) {
+      // 从实际存储中获取当前对话，避免并发时 session.conversationCount 过时
+      const existingConvs = await getConversations(params.sessionId);
+      const startIndex = existingConvs.length;
       const convRecords: Conversation[] = payload.conversations.map((c, i) => ({
         id: `conv-${generateId()}`,
         sessionId: params.sessionId,
-        turnIndex: session.conversationCount + i,
+        turnIndex: startIndex + i,
         role: c.role,
         content: c.content,
         source: c.source,

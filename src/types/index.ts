@@ -62,7 +62,7 @@ export interface EnvironmentSnapshot {
   workspace: {
     vscodeSettings: Record<string, unknown> | null;
     cursorRules: string | null;
-    fileCount: string;
+    fileCount: number;
   };
 }
 

@@ -20,9 +20,18 @@ import type {
   Artifact,
 } from "@/types";
 
+const kvUrl = process.env.KV_REST_API_URL;
+const kvToken = process.env.KV_REST_API_TOKEN;
+
+if (!kvUrl || !kvToken) {
+  throw new Error(
+    "Missing required environment variables: KV_REST_API_URL and KV_REST_API_TOKEN must be set"
+  );
+}
+
 const redis = new Redis({
-  url: process.env.KV_REST_API_URL!,
-  token: process.env.KV_REST_API_TOKEN!,
+  url: kvUrl,
+  token: kvToken,
 });
 
 // ─── Projects ───────────────────────────────────────────
@@ -46,8 +55,10 @@ export async function getProjectById(id: string): Promise<Project | null> {
 }
 
 export async function upsertProject(project: Project): Promise<void> {
-  await redis.sadd("projects", project.id);
-  await redis.set(`project:${project.id}`, JSON.stringify(project));
+  const pipeline = redis.pipeline();
+  pipeline.sadd("projects", project.id);
+  pipeline.set(`project:${project.id}`, JSON.stringify(project));
+  await pipeline.exec();
 }
 
 // ─── Sessions ───────────────────────────────────────────
@@ -71,8 +82,10 @@ export async function getSessionById(id: string): Promise<Session | null> {
 }
 
 export async function insertSession(session: Session): Promise<void> {
-  await redis.sadd(`sessions:${session.projectId}`, session.id);
-  await redis.set(`session:${session.id}`, JSON.stringify(session));
+  const pipeline = redis.pipeline();
+  pipeline.sadd(`sessions:${session.projectId}`, session.id);
+  pipeline.set(`session:${session.id}`, JSON.stringify(session));
+  await pipeline.exec();
 }
 
 // ─── Conversations ──────────────────────────────────────
@@ -192,19 +205,17 @@ export async function deleteSession(sessionId: string): Promise<void> {
 }
 
 export async function deleteProject(projectId: string): Promise<void> {
-  // 先删除所有关联 sessions
+  // 先获取所有关联 session IDs
   const sessionIds = await redis.smembers(`sessions:${projectId}`);
+
+  // 用单个 pipeline 删除所有数据
+  const pipeline = redis.pipeline();
   for (const sid of sessionIds) {
-    const pipeline = redis.pipeline();
     pipeline.del(`conversations:${sid}`);
     pipeline.del(`screenshots:${sid}`);
     pipeline.del(`artifacts:${sid}`);
     pipeline.del(`session:${sid}`);
-    await pipeline.exec();
   }
-
-  // 删除 sessions 集合、project 本身、从 projects 集合移除
-  const pipeline = redis.pipeline();
   pipeline.del(`sessions:${projectId}`);
   pipeline.del(`project:${projectId}`);
   pipeline.srem("projects", projectId);

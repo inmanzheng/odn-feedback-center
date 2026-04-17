@@ -36,6 +36,7 @@ export function ScreenshotGallery({ screenshots }: { screenshots: Screenshot[] }
               <img
                 src={getImageSrc(ss.base64)}
                 alt={ss.filename}
+                loading="lazy"
                 className="w-full h-full object-cover"
               />
             </div>
