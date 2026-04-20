@@ -11,6 +11,8 @@ export interface FeedbackPayload {
     projectPath: string;        // 项目绝对路径
     platform: string;           // "cursor" | "codebuddy" | ...
     availableSources: string[]; // ["realtime", "specstory", "cursor-db", "agent-recall"]
+    sessionId?: string;        // 可选，已有会话 ID 时传入，追加到该会话而非创建新会话
+    lastSyncTs?: string;        // 可选，上次同步的最后一条对话时间戳，用于服务端去重
   };
   /** 合并去重后的对话历史 */
   conversations: ConversationEntry[];

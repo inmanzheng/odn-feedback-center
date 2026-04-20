@@ -5,10 +5,16 @@
 import {
   upsertProject,
   getProjectById,
+  getSessionById,
   insertSession,
   insertConversations,
   insertScreenshots,
   insertArtifacts,
+  getConversations,
+  appendConversations,
+  appendScreenshots,
+  appendArtifacts,
+  updateSession,
 } from "@/lib/db/store";
 import { generateId } from "@/lib/utils";
 import { parseSummaryContent } from "@/lib/parser/summary-parser";
@@ -31,19 +37,35 @@ export interface ProcessResult {
 
 export async function processUpload(payload: FeedbackPayload): Promise<ProcessResult> {
   const { meta, conversations, summary, environment, artifacts, screenshots, dataQuality } = payload;
+  const now = new Date().toISOString();
 
-  // 1. 生成 ID
   // 优先使用客户端传来的 projectId（本地持久化的 UUID），
   // 如果没有则 fallback 到 projectName slug 化（向后兼容）
   const projectId = meta.projectId || slugify(meta.projectName);
   const userId = meta.userId || null;
-  const sessionId = `sess-${generateId()}`;
-  const now = new Date().toISOString();
 
-  // 2. 提取涉及的 Skills
+  // ─── 追加模式：如果传入了已有 sessionId ──────────────────
+  if (meta.sessionId) {
+    const existingSession = await getSessionById(meta.sessionId);
+    if (existingSession && existingSession.projectId === projectId) {
+      // 验证通过，执行增量追加
+      return appendToExistingSession({
+        sessionId: meta.sessionId,
+        projectId,
+        payload,
+        now,
+      });
+    }
+    // sessionId 无效或不匹配 projectId，fall through 创建新会话
+  }
+
+  // ─── 创建模式：新建 Session ────────────────────────────────
+  const sessionId = `sess-${generateId()}`;
+
+  // 提取涉及的 Skills
   const skillsUsed = extractSkillsFromSummary(summary);
 
-  // 3. 存储 Project（upsert）
+  // 存储 Project（upsert）
   const project: Project = {
     id: projectId,
     userId,
@@ -62,17 +84,16 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   const existing = await getProjectById(projectId);
   if (existing) {
     project.createdAt = existing.createdAt;
-    project.userId = existing.userId || userId; // 保留最初设置的 userId
+    project.userId = existing.userId || userId;
     project.totalSessions = existing.totalSessions + 1;
     project.totalFeedbacks = existing.totalFeedbacks + 1;
-    // 合并 availableSources
     const srcSet = new Set([...existing.availableSources, ...meta.availableSources]);
     project.availableSources = Array.from(srcSet);
   }
 
   await upsertProject(project);
 
-  // 4. 存储 Session
+  // 存储 Session
   const session: Session = {
     id: sessionId,
     projectId,
@@ -87,7 +108,7 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   };
   await insertSession(session);
 
-  // 5. 存储 Conversations
+  // 存储 Conversations
   const convRecords: Conversation[] = conversations.map((c, i) => ({
     id: `conv-${generateId()}`,
     sessionId,
@@ -101,7 +122,7 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   }));
   await insertConversations(sessionId, convRecords);
 
-  // 6. 存储 Screenshots
+  // 存储 Screenshots
   const ssRecords: Screenshot[] = (screenshots ?? []).map((s) => ({
     id: `ss-${generateId()}`,
     sessionId,
@@ -112,7 +133,7 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
   }));
   await insertScreenshots(sessionId, ssRecords);
 
-  // 7. 存储 Artifacts
+  // 存储 Artifacts
   const artRecords: Artifact[] = (artifacts ?? []).map((a) => ({
     id: `art-${generateId()}`,
     sessionId,
@@ -129,6 +150,113 @@ export async function processUpload(payload: FeedbackPayload): Promise<ProcessRe
     projectName: meta.projectName,
     conversationCount: conversations.length,
     screenshotCount: ssRecords.length,
+  };
+}
+
+// ─── 增量追加到已有会话 ─────────────────────────────────────
+
+interface AppendContext {
+  sessionId: string;
+  projectId: string;
+  payload: FeedbackPayload;
+  now: string;
+}
+
+async function appendToExistingSession(ctx: AppendContext): Promise<ProcessResult> {
+  const { sessionId, projectId, payload, now } = ctx;
+  const { meta, conversations, summary, environment, artifacts, screenshots, dataQuality } = payload;
+
+  // 1. 去重对话：只保留 ts > lastSyncTs 的对话
+  const lastSyncTs = meta.lastSyncTs ?? "";
+  const newConversations = lastSyncTs
+    ? conversations.filter((c) => c.ts > lastSyncTs)
+    : conversations;
+
+  let appendedConversations = 0;
+  let appendedScreenshots = 0;
+  let appendedArtifacts = 0;
+
+  // 2. 追加对话
+  if (newConversations.length > 0) {
+    const existingConvs = await getConversations(sessionId);
+    const startIndex = existingConvs.length;
+    const convRecords: Conversation[] = newConversations.map((c, i) => ({
+      id: `conv-${generateId()}`,
+      sessionId,
+      turnIndex: startIndex + i,
+      role: c.role,
+      content: c.content,
+      source: c.source,
+      confidence: c.confidence,
+      toolCalls: c.toolCalls ?? null,
+      ts: c.ts,
+    }));
+    await appendConversations(sessionId, convRecords);
+    appendedConversations = convRecords.length;
+  }
+
+  // 3. 追加截图
+  if (screenshots && screenshots.length > 0) {
+    const ssRecords: Screenshot[] = screenshots.map((s) => ({
+      id: `ss-${generateId()}`,
+      sessionId,
+      filename: s.filename,
+      base64: s.base64,
+      source: s.source,
+      ts: now,
+    }));
+    await appendScreenshots(sessionId, ssRecords);
+    appendedScreenshots = ssRecords.length;
+  }
+
+  // 4. 追加产出文件
+  if (artifacts && artifacts.length > 0) {
+    const artRecords: Artifact[] = artifacts.map((a) => ({
+      id: `art-${generateId()}`,
+      sessionId,
+      filePath: a.path,
+      content: a.content,
+      size: a.size,
+      collectedVia: a.collectedVia,
+    }));
+    await appendArtifacts(sessionId, artRecords);
+    appendedArtifacts = artRecords.length;
+  }
+
+  // 5. 更新 session 元数据
+  const sessionUpdates: Partial<Session> = {};
+  if (appendedConversations > 0) {
+    const existingSession = await getSessionById(sessionId);
+    if (existingSession) {
+      sessionUpdates.conversationCount = existingSession.conversationCount + appendedConversations;
+    }
+  }
+  if (summary !== undefined) {
+    sessionUpdates.summaryMd = summary;
+  }
+  if (environment !== undefined) {
+    sessionUpdates.environment = environment;
+  }
+  if (dataQuality !== undefined) {
+    sessionUpdates.dataQuality = dataQuality;
+  }
+  if (Object.keys(sessionUpdates).length > 0) {
+    await updateSession(sessionId, sessionUpdates);
+  }
+
+  // 6. 更新 project 的 lastActiveAt
+  const project = await getProjectById(projectId);
+  if (project) {
+    project.lastActiveAt = now;
+    await upsertProject(project);
+  }
+
+  return {
+    sessionId,
+    projectId,
+    projectName: meta.projectName,
+    conversationCount: appendedConversations,
+    screenshotCount: appendedScreenshots,
   };
 }
 
